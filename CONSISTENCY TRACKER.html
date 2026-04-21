@@ -1,0 +1,1423 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Consistency Tracker</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      :root {
+        color-scheme: light dark; /* Tells the browser you support both */
+      --bg-color: light-dark(#ffffff, #121212); /* Light first, Dark second */
+      --text-color: light-dark(#000000, #e0e0e0);
+        --bg: #0a0a0f;
+        --surface: #111118;
+        --panel: #16161f;
+        --border: #1e1e2e;
+        --accent: #00e5a0;
+        --accent2: #7c6aff;
+        --danger: #ff4f6a;
+        --text: #e8e8f0;
+        --muted: #55556a;
+        --cell-done: rgba(0, 229, 160, 0.18);
+        --cell-miss: rgba(255, 79, 106, 0.08);
+        --glow: 0 0 20px rgba(0, 229, 160, 0.15);
+      }
+
+      html,
+      body {
+        height: 100%;
+        background: var(--bg);
+        color: var(--text);
+        font-family: "JetBrains Mono", monospace;
+        font-size: 13px;
+        overflow: hidden;
+      }
+
+      /* ── LAYOUT ─────────────────────────────────── */
+      #app {
+        display: grid;
+        grid-template-rows: 56px 1fr;
+        grid-template-columns: 260px 1fr;
+        height: 100vh;
+      }
+
+      /* ── TOPBAR ─────────────────────────────────── */
+      #topbar {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 24px;
+        background: white;
+        border-bottom: 1px solid var(--border);
+        position: relative;
+        z-index: 10;
+      }
+      .topbar-left {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+      .logo-mark {
+        width: 48px;
+        height: 28px;
+        background: rgba(73, 233, 64, 0.769);
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: "Syne", sans-serif;
+        font-weight: 800;
+        font-size: 14px;
+        color: #000;
+        letter-spacing: -1px;
+        flex-shrink: 0;
+      }
+      .app-title {
+        font-family: "Syne", sans-serif;
+        font-weight: 700;
+        font-size: 15px;
+        letter-spacing: 0.04em;
+        color: black;
+      }
+      .app-title span {
+        color: var(--accent);
+      }
+
+      .topbar-right {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .month-nav {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: white;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 4px 6px;
+      }
+      .month-nav button {
+        background: none;
+        border: none;
+        color: black;
+        cursor: pointer;
+        font-size: 14px;
+        padding: 2px 6px;
+        border-radius: 4px;
+        transition:
+          color 0.2s,
+          background 0.2s;
+        font-family: "JetBrains Mono", monospace;
+      }
+      .month-nav button:hover {
+        color: var(--accent);
+        background: rgba(0, 229, 160, 0.08);
+      }
+      #month-label {
+        font-family: "Syne", sans-serif;
+        font-weight: 600;
+        font-size: 13px;
+        min-width: 130px;
+        text-align: center;
+        color: black;
+      }
+
+      /* ── SIDEBAR ────────────────────────────────── */
+      #sidebar {
+        background: rgb(235, 225, 225);
+        border-right: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .sidebar-header {
+        padding: 16px 16px 10px;
+        border-bottom: 1px solid black;
+      }
+      .sidebar-header h3 {
+        font-family: "Syne", sans-serif;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: black;
+        margin-bottom: 10px;
+      }
+      .add-habit-row {
+        display: flex;
+        gap: 6px;
+      }
+      .add-habit-row input {
+        flex: 1;
+        background: white;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: rgb(0, 0, 0);
+        font-family: "JetBrains Mono", monospace;
+        font-size: 12px;
+        padding: 6px 10px;
+        outline: none;
+        transition: border-color 0.2s;
+      }
+      .add-habit-row input:focus {
+        border-color: var(--accent);
+      }
+      .add-habit-row input::placeholder {
+        color: var(--muted);
+      }
+      .btn-add {
+        background: rgb(192, 180, 180);
+        border: none;
+        border-radius: 6px;
+        color: #000;
+        cursor: pointer;
+        font-size: 16px;
+        font-weight: 700;
+        padding: 0 10px;
+        transition:
+          opacity 0.2s,
+          transform 0.1s;
+      }
+      .btn-add:hover {
+        opacity: 0.85;
+        transform: scale(1.05);
+        background-color: #7c6aff;
+      }
+
+      #habit-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 8px 0;
+      }
+      #habit-list::-webkit-scrollbar {
+        width: 3px;
+      }
+      #habit-list::-webkit-scrollbar-thumb {
+        background: var(--border);
+        border-radius: 2px;
+      }
+
+      .habit-item {
+        display: flex;
+        align-items: center;
+  
+        gap: 8px;
+        padding: 8px 16px;
+        cursor: pointer;
+        transition: background 0.15s;
+        border-left: 3px solid transparent;
+      }
+      .habit-item:hover {
+        background: grey;
+      }
+      .habit-item.selected {
+        background: rgb(5, 12, 213);
+        border-left-color: var(--accent);
+      }
+      .habit-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+      .habit-name {
+        flex: 1;
+        font-size: 12px;
+        color: black;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .habit-streak {
+        font-size: 10px;
+        color: var(--accent);
+        background: rgba(0, 229, 160, 0.1);
+        padding: 2px 6px;
+        border-radius: 10px;
+        white-space: nowrap;
+      }
+      .habit-streak.cold {
+        color: var(--muted);
+        background: rgba(255, 255, 255, 0.04);
+      }
+      .btn-delete {
+        background: rgb(203, 192, 192);
+        border: none;
+        color: red;
+        cursor: pointer;
+        font-size: 16px;
+        padding: 2px 4px;
+        border-radius: 4px;
+        opacity: 100;
+        transition:
+          opacity 0.2s,
+          color 0.7s;
+      }
+      .habit-item:hover .btn-delete {
+        opacity: 75;
+      }
+      .btn-delete:hover {
+        color: var(--danger);
+      }
+
+      /* sidebar stats */
+      .sidebar-stats {
+        padding: 12px 16px;
+        border-top: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .stat-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .stat-label {
+        font-size: 10px;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+      .stat-val {
+        font-family: "Syne", sans-serif;
+        font-weight: 700;
+        font-size: 15px;
+        color: var(--accent);
+      }
+      .stat-val.purple {
+        color: var(--accent2);
+      }
+
+      /* sleep row in sidebar */
+      .sleep-section {
+        padding: 10px 16px;
+        border-top: 1px solid var(--border);
+      }
+      .sleep-section h3 {
+        font-family: "Syne", sans-serif;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 8px;
+      }
+      .sleep-today {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .sleep-today label {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .sleep-today input[type="number"] {
+        width: 60px;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--text);
+        font-family: "JetBrains Mono", monospace;
+        font-size: 13px;
+        padding: 4px 8px;
+        outline: none;
+        transition: border-color 0.2s;
+      }
+      .sleep-today input:focus {
+        border-color: var(--accent2);
+      }
+      .sleep-avg {
+        font-size: 10px;
+        color: var(--muted);
+        margin-top: 4px;
+      }
+
+      /* ── MAIN ───────────────────────────────────── */
+      #main {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      /* stats strip */
+      #stats-strip {
+        display: flex;
+        gap: 1px;
+        background: var(--border);
+        border-bottom: 1px solid var(--border);
+        flex-shrink: 0;
+      }
+      .strip-card {
+        flex: 1;
+        background: var(--surface);
+        padding: 10px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .strip-card-label {
+        font-size: 9px;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--muted);
+      }
+      .strip-card-val {
+        font-family: "Syne", sans-serif;
+        font-weight: 800;
+        font-size: 20px;
+        color: var(--accent);
+        line-height: 1;
+      }
+      .strip-card-val.purple {
+        color: var(--accent2);
+      }
+      .strip-card-val.red {
+        color: var(--danger);
+      }
+      .strip-card-sub {
+        font-size: 9px;
+        color: var(--muted);
+      }
+
+      /* grid area */
+      #grid-container {
+        flex: 1;
+        overflow: auto;
+        padding: 16px;
+      }
+      #grid-container::-webkit-scrollbar {
+        width: 4px;
+        height: 4px;
+      }
+      #grid-container::-webkit-scrollbar-thumb {
+        background: var(--border);
+        border-radius: 2px;
+      }
+
+      #tracker-grid {
+        border-collapse: collapse;
+        width: 100%;
+      }
+
+      /* header row */
+      #tracker-grid thead th {
+        font-size: 10px;
+        color: var(--muted);
+        padding: 4px 2px;
+        text-align: center;
+        font-weight: 400;
+        white-space: nowrap;
+        position: sticky;
+        top: 0;
+        background: var(--bg);
+        z-index: 2;
+      }
+      #tracker-grid thead th.today-col {
+        color: var(--accent);
+        font-weight: 700;
+      }
+      #tracker-grid thead th:first-child {
+        text-align: left;
+        padding-left: 8px;
+        min-width: 140px;
+        position: sticky;
+        left: 0;
+        z-index: 3;
+        background: var(--bg);
+      }
+
+      /* body rows */
+      #tracker-grid tbody tr {
+        transition: background 0.1s;
+      }
+      #tracker-grid tbody tr:hover td {
+        background: rgba(255, 255, 255, 0.02);
+      }
+
+      #tracker-grid tbody td {
+        padding: 2px;
+        text-align: center;
+        vertical-align: middle;
+      }
+      #tracker-grid tbody td:first-child {
+        text-align: left;
+        padding: 4px 8px;
+        position: sticky;
+        left: 0;
+        background: var(--bg);
+        z-index: 1;
+        font-size: 12px;
+        color: var(--text);
+        white-space: nowrap;
+        max-width: 140px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      /* cells */
+      .cell {
+        width: 26px;
+        height: 26px;
+        border-radius: 5px;
+        border: 1px solid var(--border);
+        background: transparent;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        transition:
+          background 0.15s,
+          border-color 0.15s,
+          transform 0.1s;
+        user-select: none;
+      }
+      .cell:hover {
+        border-color: var(--accent);
+        transform: scale(1.1);
+      }
+      .cell.done {
+        background: var(--cell-done);
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .cell.miss {
+        background: var(--cell-miss);
+        border-color: rgba(255, 79, 106, 0.3);
+        color: rgba(255, 79, 106, 0.5);
+      }
+      .cell.future {
+        opacity: 0.2;
+        cursor: default;
+        pointer-events: none;
+      }
+      .cell.today-col-cell {
+        border-color: rgba(0, 229, 160, 0.4);
+      }
+
+      /* sleep row */
+      .sleep-row td:first-child {
+        color: var(--accent2) !important;
+        font-size: 11px !important;
+      }
+      .sleep-cell {
+        width: 26px;
+        height: 26px;
+        border-radius: 5px;
+        border: 1px solid var(--border);
+        background: transparent;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 9px;
+        color: var(--accent2);
+        cursor: pointer;
+        transition:
+          background 0.15s,
+          border-color 0.15s;
+      }
+      .sleep-cell:hover {
+        border-color: var(--accent2);
+        background: rgba(124, 106, 255, 0.1);
+      }
+      .sleep-cell.has-data {
+        background: rgba(124, 106, 255, 0.15);
+        border-color: var(--accent2);
+      }
+      .sleep-cell.future {
+        opacity: 0.2;
+        pointer-events: none;
+      }
+
+      /* daily % row */
+      .pct-row td:first-child {
+        color: var(--muted) !important;
+        font-size: 10px !important;
+        font-style: italic;
+      }
+      .pct-cell {
+        width: 26px;
+        height: 26px;
+        border-radius: 5px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 9px;
+        font-weight: 500;
+      }
+
+      /* empty state */
+      .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        gap: 12px;
+        color: var(--muted);
+      }
+      .empty-state .big {
+        font-family: "Syne", sans-serif;
+        font-size: 48px;
+        opacity: 0.3;
+      }
+      .empty-state p {
+        font-size: 13px;
+      }
+
+      /* modal */
+      .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 100;
+        backdrop-filter: blur(4px);
+      }
+      .modal {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 24px;
+        min-width: 280px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .modal h3 {
+        font-family: "Syne", sans-serif;
+        font-weight: 700;
+        font-size: 15px;
+      }
+      .modal input[type="number"] {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        color: var(--text);
+        font-family: "JetBrains Mono", monospace;
+        font-size: 18px;
+        padding: 10px 14px;
+        width: 100%;
+        outline: none;
+        text-align: center;
+        transition: border-color 0.2s;
+      }
+      .modal input:focus {
+        border-color: var(--accent2);
+      }
+      .modal-hint {
+        font-size: 11px;
+        color: var(--muted);
+        text-align: center;
+      }
+      .modal-btns {
+        display: flex;
+        gap: 8px;
+      }
+      .modal-btns button {
+        flex: 1;
+        padding: 8px;
+        border-radius: 8px;
+        border: none;
+        cursor: pointer;
+        font-family: "Syne", sans-serif;
+        font-weight: 600;
+        font-size: 13px;
+        transition: opacity 0.2s;
+      }
+      .btn-confirm {
+        background: var(--accent2);
+        color: #fff;
+      }
+      .btn-cancel {
+        background: var(--border);
+        color: var(--muted);
+      }
+      .modal-btns button:hover {
+        opacity: 0.85;
+      }
+
+      /* toast */
+      #toast {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: var(--panel);
+        border: 1px solid var(--accent);
+        border-radius: 8px;
+        padding: 10px 18px;
+        font-size: 12px;
+        color: var(--accent);
+        opacity: 0;
+        transform: translateY(10px);
+        transition:
+          opacity 0.3s,
+          transform 0.3s;
+        z-index: 200;
+        pointer-events: none;
+      }
+      #toast.show {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      /* progress bar used in strip */
+      .mini-bar {
+        height: 3px;
+        background: var(--border);
+        border-radius: 2px;
+        overflow: hidden;
+        margin-top: 4px;
+      }
+      .mini-bar-fill {
+        height: 100%;
+        border-radius: 2px;
+        background: var(--accent);
+        transition: width 0.4s ease;
+      }
+
+      /* colour swatches for habit dots */
+      .colour-picker {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-top: 6px;
+      }
+      .colour-swatch {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        cursor: pointer;
+        border: 2px solid transparent;
+        transition:
+          transform 0.15s,
+          border-color 0.15s;
+      }
+      .colour-swatch:hover {
+        transform: scale(1.2);
+      }
+      .colour-swatch.active {
+        border-color: var(--text);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <!-- TOPBAR -->
+      <header id="topbar">
+        <div class="topbar-left">
+          <div class="logo-mark">CT</div>
+          <div class="app-title">CONSISTENCY <span>TRACKER</span></div>
+        </div>
+        <div class="topbar-right">
+          <div class="month-nav">
+            <button id="prev-month">&#8592;</button>
+            <span id="month-label">—</span>
+            <button id="next-month">&#8594;</button>
+          </div>
+        </div>
+      </header>
+
+      <!-- SIDEBAR -->
+      <aside id="sidebar">
+        <div class="sidebar-header">
+          <h3>Habits</h3>
+          <div class="add-habit-row">
+            <input
+              type="text"
+              id="habit-input"
+              placeholder="New habit…"
+              maxlength="30"
+            />
+            <button class="btn-add" id="btn-add-habit">+</button>
+          </div>
+          <div class="colour-picker" id="colour-picker"></div>
+        </div>
+
+        <div id="habit-list"></div>
+
+        <div class="sleep-section">
+          <h3>Sleep — Today</h3>
+          <div class="sleep-today">
+            <label>Hours:</label>
+            <input
+              type="number"
+              id="sleep-today-input"
+              min="0"
+              max="24"
+              step="0.5"
+              placeholder="7.5"
+            />
+            <button
+              class="btn-add"
+              id="btn-log-sleep"
+              style="
+                font-size: 11px;
+                padding: 0 8px;
+                background: var(--accent2);
+              "
+            >
+              LOG
+            </button>
+          </div>
+          <div class="sleep-avg" id="sleep-avg-label">Monthly avg: —</div>
+        </div>
+
+        <div class="sidebar-stats">
+          <div class="stat-row">
+            <span class="stat-label">Month Progress</span>
+            <span class="stat-val" id="stat-month-pct">0%</span>
+          </div>
+          <div class="mini-bar">
+            <div class="mini-bar-fill" id="stat-bar" style="width: 0%"></div>
+          </div>
+          <div class="stat-row" style="margin-top: 4px">
+            <span class="stat-label">Best Streak</span>
+            <span class="stat-val purple" id="stat-best-streak">0d</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Perfect Days</span>
+            <span class="stat-val" id="stat-perfect">0</span>
+          </div>
+        </div>
+      </aside>
+
+      <!-- MAIN -->
+      <main id="main">
+        <div id="stats-strip">
+          <div class="strip-card">
+            <div class="strip-card-label">Today's Score</div>
+            <div class="strip-card-val" id="sc-today">—</div>
+            <div class="strip-card-sub" id="sc-today-sub">no habits yet</div>
+          </div>
+          <div class="strip-card">
+            <div class="strip-card-label">Active Habits</div>
+            <div class="strip-card-val purple" id="sc-habits">0</div>
+            <div class="strip-card-sub">being tracked</div>
+          </div>
+          <div class="strip-card">
+            <div class="strip-card-label">Longest Streak</div>
+            <div class="strip-card-val" id="sc-streak">0d</div>
+            <div class="strip-card-sub" id="sc-streak-name">—</div>
+          </div>
+          <div class="strip-card">
+            <div class="strip-card-label">Month Avg</div>
+            <div class="strip-card-val purple" id="sc-avg">0%</div>
+            <div class="strip-card-sub">completion rate</div>
+          </div>
+          <div class="strip-card">
+            <div class="strip-card-label">Perfect Days</div>
+            <div class="strip-card-val" id="sc-perfect">0</div>
+            <div class="strip-card-sub">this month</div>
+          </div>
+        </div>
+
+        <div id="grid-container">
+          <div class="empty-state" id="empty-state">
+            <div class="big">◈</div>
+            <p>Add a habit to start tracking</p>
+          </div>
+          <table id="tracker-grid" style="display: none">
+            <thead id="grid-head"></thead>
+            <tbody id="grid-body"></tbody>
+          </table>
+        </div>
+      </main>
+    </div>
+
+    <!-- Sleep modal -->
+    <div class="modal-overlay" id="sleep-modal" style="display: none">
+      <div class="modal">
+        <h3>Log Sleep</h3>
+        <input
+          type="number"
+          id="modal-sleep-val"
+          min="0"
+          max="24"
+          step="0.5"
+          placeholder="7.5"
+        />
+        <div class="modal-hint" id="modal-sleep-hint">hours of sleep</div>
+        <div class="modal-btns">
+          <button class="btn-cancel" id="modal-cancel">Cancel</button>
+          <button class="btn-confirm" id="modal-confirm">Log It</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast"></div>
+
+    <script>
+      // ════════════════════════════════════════════════
+      //  STATE
+      // ════════════════════════════════════════════════
+      const STORAGE_KEY = "ct_habits";
+      const LOG_KEY = "ct_log";
+      const SLEEP_KEY = "ct_sleep";
+      const COLOURS = [
+        "#00e5a0",
+        "#7c6aff",
+        "#ff4f6a",
+        "#f5a623",
+        "#4fc3f7",
+        "#ce93d8",
+        "#80cbc4",
+        "#ff8a65",
+      ];
+
+      let habits = []; // [{id, name, colour, createdAt}]
+      let log = {}; // { 'YYYY-MM-DD': { habitId: true } }
+      let sleepLog = {}; // { 'YYYY-MM-DD': hours }
+      let viewYear = new Date().getFullYear();
+      let viewMonth = new Date().getMonth();
+      let selectedColour = COLOURS[0];
+      let pendingSleepDate = null;
+
+      // ════════════════════════════════════════════════
+      //  PERSISTENCE
+      // ════════════════════════════════════════════════
+      function save() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(habits));
+        localStorage.setItem(LOG_KEY, JSON.stringify(log));
+        localStorage.setItem(SLEEP_KEY, JSON.stringify(sleepLog));
+      }
+      function load() {
+        try {
+          habits = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+        } catch {
+          habits = [];
+        }
+        try {
+          log = JSON.parse(localStorage.getItem(LOG_KEY)) || {};
+        } catch {
+          log = {};
+        }
+        try {
+          sleepLog = JSON.parse(localStorage.getItem(SLEEP_KEY)) || {};
+        } catch {
+          sleepLog = {};
+        }
+      }
+
+      // ════════════════════════════════════════════════
+      //  HELPERS
+      // ════════════════════════════════════════════════
+      function pad(n) {
+        return String(n).padStart(2, "0");
+      }
+      function dateKey(y, m, d) {
+        return `${y}-${pad(m + 1)}-${pad(d)}`;
+      }
+      function todayKey() {
+        const n = new Date();
+        return dateKey(n.getFullYear(), n.getMonth(), n.getDate());
+      }
+      function daysInMonth(y, m) {
+        return new Date(y, m + 1, 0).getDate();
+      }
+      function isToday(y, m, d) {
+        const n = new Date();
+        return n.getFullYear() === y && n.getMonth() === m && n.getDate() === d;
+      }
+      function isFuture(y, m, d) {
+        const t = new Date();
+        t.setHours(0, 0, 0, 0);
+        const c = new Date(y, m, d);
+        return c > t;
+      }
+      function uid() {
+        return Math.random().toString(36).slice(2, 9);
+      }
+      function showToast(msg) {
+        const el = document.getElementById("toast");
+        el.textContent = msg;
+        el.classList.add("show");
+        setTimeout(() => el.classList.remove("show"), 2200);
+      }
+
+      // streak for a habit (consecutive days up to & including today)
+      function calcStreak(habitId) {
+        let streak = 0;
+        const n = new Date();
+        n.setHours(0, 0, 0, 0);
+        for (let i = 0; i < 365; i++) {
+          const d = new Date(n);
+          d.setDate(n.getDate() - i);
+          const k = dateKey(d.getFullYear(), d.getMonth(), d.getDate());
+          // skip future (shouldn't happen but safety)
+          if (log[k] && log[k][habitId]) {
+            streak++;
+          } else {
+            // allow today to be unchecked without breaking streak
+            if (i === 0) continue;
+            break;
+          }
+        }
+        return streak;
+      }
+
+      // ════════════════════════════════════════════════
+      //  COLOUR PICKER
+      // ════════════════════════════════════════════════
+      function renderColourPicker() {
+        const cp = document.getElementById("colour-picker");
+        cp.innerHTML = "";
+        COLOURS.forEach((c) => {
+          const s = document.createElement("div");
+          s.className =
+            "colour-swatch" + (c === selectedColour ? " active" : "");
+          s.style.background = c;
+          s.addEventListener("click", () => {
+            selectedColour = c;
+            renderColourPicker();
+          });
+          cp.appendChild(s);
+        });
+      }
+
+     
+
+      // ════════════════════════════════════════════════
+      //  HABIT LIST (sidebar)
+      // ════════════════════════════════════════════════
+      function renderHabitList() {
+        const list = document.getElementById("habit-list");
+        list.innerHTML = "";
+        if (!habits.length) {
+          list.innerHTML =
+            '<div style="padding:16px;font-size:11px;color:var(--muted);text-align:center">No habits yet</div>';
+          return;
+        }
+        habits.forEach((h) => {
+          const streak = calcStreak(h.id);
+          const row = document.createElement("div");
+          row.className = "habit-item";
+          row.innerHTML = `
+      <div class="habit-dot" style="background:${h.colour}"></div>
+      <div class="habit-name">${h.name}</div>
+      <div class="habit-streak ${streak === 0 ? "cold" : ""}">${streak}d</div>
+      <button class="btn-delete" data-id="${h.id}" title="Delete habit">✕</button>
+    `;
+          row.querySelector(".btn-delete").addEventListener("click", (e) => {
+            e.stopPropagation();
+            deleteHabit(h.id);
+          });
+          list.appendChild(row);
+        });
+      }
+
+      // ════════════════════════════════════════════════
+      //  ADD / DELETE HABIT
+      // ════════════════════════════════════════════════
+      function addHabit() {
+        const input = document.getElementById("habit-input");
+        const name = input.value.trim();
+        if (!name) return;
+        if (habits.find((h) => h.name.toLowerCase() === name.toLowerCase())) {
+          showToast("Habit already exists");
+          return;
+        }
+        habits.push({
+          id: uid(),
+          name,
+          colour: selectedColour,
+          createdAt: todayKey(),
+        });
+        input.value = "";
+        save();
+        render();
+        showToast(`"${name}" added`);
+      }
+
+      function deleteHabit(id) {
+        habits = habits.filter((h) => h.id !== id);
+        // clean log
+        Object.keys(log).forEach((dk) => {
+          if (log[dk]) delete log[dk][id];
+        });
+        save();
+        render();
+        showToast("Habit removed");
+      }
+
+      // ════════════════════════════════════════════════
+      //  TOGGLE CELL
+      // ════════════════════════════════════════════════
+      function toggleCell(habitId, y, m, d) {
+        if (isFuture(y, m, d)) return;
+        const k = dateKey(y, m, d);
+        if (!log[k]) log[k] = {};
+        log[k][habitId] = !log[k][habitId];
+        if (!log[k][habitId]) delete log[k][habitId];
+        save();
+        render();
+      }
+
+      // ════════════════════════════════════════════════
+      //  SLEEP LOGGING
+      // ════════════════════════════════════════════════
+      function logSleepToday() {
+        const val = parseFloat(
+          document.getElementById("sleep-today-input").value,
+        );
+        if (isNaN(val) || val < 0 || val > 24) {
+          showToast("Enter valid hours (0–24)");
+          return;
+        }
+        sleepLog[todayKey()] = val;
+        document.getElementById("sleep-today-input").value = "";
+        save();
+        render();
+        showToast(`Sleep logged: ${val}h`);
+      }
+
+      function openSleepModal(dateStr) {
+        pendingSleepDate = dateStr;
+        const existing = sleepLog[dateStr];
+        document.getElementById("modal-sleep-val").value = existing || "";
+        document.getElementById("modal-sleep-hint").textContent =
+          `Hours slept on ${dateStr}`;
+        document.getElementById("sleep-modal").style.display = "flex";
+      }
+      function closeSleepModal() {
+        document.getElementById("sleep-modal").style.display = "none";
+        pendingSleepDate = null;
+      }
+      function confirmSleepModal() {
+        const val = parseFloat(
+          document.getElementById("modal-sleep-val").value,
+        );
+        if (isNaN(val) || val < 0 || val > 24) {
+          showToast("Enter valid hours");
+          return;
+        }
+        sleepLog[pendingSleepDate] = val;
+        save();
+        render();
+        closeSleepModal();
+        showToast(`Sleep logged: ${val}h`);
+      }
+
+      // ════════════════════════════════════════════════
+      //  GRID RENDER
+      // ════════════════════════════════════════════════
+      function renderGrid() {
+        const grid = document.getElementById("tracker-grid");
+        const empty = document.getElementById("empty-state");
+        const head = document.getElementById("grid-head");
+        const body = document.getElementById("grid-body");
+        head.innerHTML = "";
+        body.innerHTML = "";
+
+        if (!habits.length) {
+          grid.style.display = "none";
+          empty.style.display = "flex";
+          return;
+        }
+        grid.style.display = "table";
+        empty.style.display = "none";
+
+        const days = daysInMonth(viewYear, viewMonth);
+        const DAY_NAMES = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+
+        // ── HEAD ────────────────────────────────────
+        const headRow = document.createElement("tr");
+        const thLabel = document.createElement("th");
+        thLabel.textContent = "Habit";
+        headRow.appendChild(thLabel);
+
+        for (let d = 1; d <= days; d++) {
+          const th = document.createElement("th");
+          const dayOfWeek = new Date(viewYear, viewMonth, d).getDay();
+          th.innerHTML = `<div>${DAY_NAMES[dayOfWeek]}</div><div style="font-weight:700;color:var(--text)">${d}</div>`;
+          if (isToday(viewYear, viewMonth, d)) th.classList.add("today-col");
+          headRow.appendChild(th);
+        }
+        head.appendChild(headRow);
+
+        // ── HABIT ROWS ──────────────────────────────
+        habits.forEach((h) => {
+          const tr = document.createElement("tr");
+
+          // label cell
+          const tdLabel = document.createElement("td");
+          tdLabel.innerHTML = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${h.colour};margin-right:6px;vertical-align:middle"></span>${h.name}`;
+          tr.appendChild(tdLabel);
+
+          for (let d = 1; d <= days; d++) {
+            const td = document.createElement("td");
+            const k = dateKey(viewYear, viewMonth, d);
+            const done = !!(log[k] && log[k][h.id]);
+            const future = isFuture(viewYear, viewMonth, d);
+            const today = isToday(viewYear, viewMonth, d);
+
+            const cell = document.createElement("div");
+            cell.className = "cell";
+            if (done) cell.classList.add("done");
+            if (future) cell.classList.add("future");
+            if (today) cell.classList.add("today-col-cell");
+            if (!done && !future) cell.classList.add("miss");
+            cell.textContent = done ? "✓" : "";
+
+            cell.addEventListener("click", () =>
+              toggleCell(h.id, viewYear, viewMonth, d),
+            );
+            td.appendChild(cell);
+            tr.appendChild(td);
+          }
+          body.appendChild(tr);
+        });
+
+        // ── SLEEP ROW ───────────────────────────────
+        const sleepTr = document.createElement("tr");
+        sleepTr.className = "sleep-row";
+        const sleepLabel = document.createElement("td");
+        sleepLabel.textContent = "💤 Sleep (h)";
+        sleepTr.appendChild(sleepLabel);
+
+        for (let d = 1; d <= days; d++) {
+          const td = document.createElement("td");
+          const k = dateKey(viewYear, viewMonth, d);
+          const val = sleepLog[k];
+          const future = isFuture(viewYear, viewMonth, d);
+
+          const cell = document.createElement("div");
+          cell.className =
+            "sleep-cell" +
+            (future ? " future" : "") +
+            (val !== undefined ? " has-data" : "");
+          cell.textContent = val !== undefined ? val : "";
+          if (!future) {
+            cell.addEventListener("click", () => openSleepModal(k));
+          }
+          td.appendChild(cell);
+          sleepTr.appendChild(td);
+        }
+        body.appendChild(sleepTr);
+
+        // ── DAILY % ROW ─────────────────────────────
+        const pctTr = document.createElement("tr");
+        pctTr.className = "pct-row";
+        const pctLabel = document.createElement("td");
+        pctLabel.textContent = "% done";
+        pctTr.appendChild(pctLabel);
+
+        for (let d = 1; d <= days; d++) {
+          const td = document.createElement("td");
+          if (!isFuture(viewYear, viewMonth, d)) {
+            const k = dateKey(viewYear, viewMonth, d);
+            const done = habits.filter((h) => log[k] && log[k][h.id]).length;
+            const pct = habits.length
+              ? Math.round((done / habits.length) * 100)
+              : 0;
+            const cell = document.createElement("div");
+            cell.className = "pct-cell";
+            cell.textContent = pct + "%";
+            // colour gradient green→red
+            const r = Math.round(255 * (1 - pct / 100));
+            const g = Math.round(229 * (pct / 100));
+            cell.style.color = `rgb(${r},${g},80)`;
+            td.appendChild(cell);
+          }
+          pctTr.appendChild(td);
+        }
+        body.appendChild(pctTr);
+      }
+
+      // ════════════════════════════════════════════════
+      //  STATS
+      // ════════════════════════════════════════════════
+      function renderStats() {
+        const days = daysInMonth(viewYear, viewMonth);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const isCurrentMonth =
+          viewYear === today.getFullYear() && viewMonth === today.getMonth();
+
+        // how many days have passed (including today) in view month
+        let passedDays = days;
+        if (isCurrentMonth) passedDays = today.getDate();
+
+        // month completion %
+        let totalChecks = 0,
+          totalPossible = 0,
+          perfectDays = 0;
+        for (let d = 1; d <= passedDays; d++) {
+          if (isFuture(viewYear, viewMonth, d)) continue;
+          const k = dateKey(viewYear, viewMonth, d);
+          const done = habits.filter((h) => log[k] && log[k][h.id]).length;
+          totalChecks += done;
+          totalPossible += habits.length;
+          if (habits.length && done === habits.length) perfectDays++;
+        }
+        const monthPct = totalPossible
+          ? Math.round((totalChecks / totalPossible) * 100)
+          : 0;
+
+        // today's score
+        const tk = todayKey();
+        const todayDone = habits.filter((h) => log[tk] && log[tk][h.id]).length;
+        const todayPct = habits.length
+          ? Math.round((todayDone / habits.length) * 100)
+          : null;
+
+        // best streak across all habits
+        let bestStreak = 0,
+          bestHabit = "—";
+        habits.forEach((h) => {
+          const s = calcStreak(h.id);
+          if (s > bestStreak) {
+            bestStreak = s;
+            bestHabit = h.name;
+          }
+        });
+
+        // sleep avg this month
+        let sleepTotal = 0,
+          sleepCount = 0;
+        for (let d = 1; d <= passedDays; d++) {
+          const k = dateKey(viewYear, viewMonth, d);
+          if (sleepLog[k] !== undefined) {
+            sleepTotal += sleepLog[k];
+            sleepCount++;
+          }
+        }
+        const sleepAvg = sleepCount
+          ? (sleepTotal / sleepCount).toFixed(1)
+          : null;
+
+        // update DOM — sidebar
+        document.getElementById("stat-month-pct").textContent = monthPct + "%";
+        document.getElementById("stat-bar").style.width = monthPct + "%";
+        document.getElementById("stat-best-streak").textContent =
+          bestStreak + "d";
+        document.getElementById("stat-perfect").textContent = perfectDays;
+        document.getElementById("sleep-avg-label").textContent = sleepAvg
+          ? `Monthly avg: ${sleepAvg}h`
+          : "Monthly avg: —";
+
+        // update DOM — strip
+        document.getElementById("sc-today").textContent =
+          todayPct !== null ? todayPct + "%" : "—";
+        document.getElementById("sc-today-sub").textContent =
+          todayPct !== null
+            ? `${todayDone}/${habits.length} habits`
+            : "no habits yet";
+        document.getElementById("sc-habits").textContent = habits.length;
+        document.getElementById("sc-streak").textContent = bestStreak + "d";
+        document.getElementById("sc-streak-name").textContent = bestHabit;
+        document.getElementById("sc-avg").textContent = monthPct + "%";
+        document.getElementById("sc-perfect").textContent = perfectDays;
+      }
+
+      // ════════════════════════════════════════════════
+      //  MONTH LABEL
+      // ════════════════════════════════════════════════
+      function renderMonthLabel() {
+        const MONTHS = [
+          "January",
+          "February",
+          "March",
+          "April",
+          "May",
+          "June",
+          "July",
+          "August",
+          "September",
+          "October",
+          "November",
+          "December",
+        ];
+        document.getElementById("month-label").textContent =
+          `${MONTHS[viewMonth]} ${viewYear}`;
+      }
+
+      // ════════════════════════════════════════════════
+      //  MASTER RENDER
+      // ════════════════════════════════════════════════
+      function render() {
+        renderMonthLabel();
+        renderColourPicker();
+        renderHabitList();
+        renderGrid();
+        renderStats();
+      }
+
+      // ════════════════════════════════════════════════
+      //  EVENT LISTENERS
+      // ════════════════════════════════════════════════
+      document
+        .getElementById("btn-add-habit")
+        .addEventListener("click", addHabit);
+      document
+        .getElementById("habit-input")
+        .addEventListener("keydown", (e) => {
+          if (e.key === "Enter") addHabit();
+        });
+
+      document.getElementById("prev-month").addEventListener("click", () => {
+        viewMonth--;
+        if (viewMonth < 0) {
+          viewMonth = 11;
+          viewYear--;
+        }
+        render();
+      });
+      document.getElementById("next-month").addEventListener("click", () => {
+        viewMonth++;
+        if (viewMonth > 11) {
+          viewMonth = 0;
+          viewYear++;
+        }
+        render();
+      });
+
+      document
+        .getElementById("btn-log-sleep")
+        .addEventListener("click", logSleepToday);
+      document
+        .getElementById("sleep-today-input")
+        .addEventListener("keydown", (e) => {
+          if (e.key === "Enter") logSleepToday();
+        });
+
+      document
+        .getElementById("modal-cancel")
+        .addEventListener("click", closeSleepModal);
+      document
+        .getElementById("modal-confirm")
+        .addEventListener("click", confirmSleepModal);
+      document.getElementById("sleep-modal").addEventListener("click", (e) => {
+        if (e.target === e.currentTarget) closeSleepModal();
+      });
+      document
+        .getElementById("modal-sleep-val")
+        .addEventListener("keydown", (e) => {
+          if (e.key === "Enter") confirmSleepModal();
+        });
+
+      // ════════════════════════════════════════════════
+      //  INIT
+      // ════════════════════════════════════════════════
+      load();
+      render();
+    </script>
+  </body>
+</html>
